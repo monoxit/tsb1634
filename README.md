@@ -9,14 +9,14 @@ _How do I, as a developer, start working on the project?_
 _Development environment_
 
 * TinySafeBoot software from http://jtxp.org/tech/tinysafeboot_en.htm
-* Atmel Stadio 6.1
+* Atmel Studio 6.2
 * AVR writer (e.g. USBtinyISP from adafruit)
 * FreeBasic
 * Ruby (for formatting hex codes)
 
 _How can I see the project working before I change anything?_
 
-1. Open tsb1634.atsln and build project by Atmel Stadio.
+1. Open tsb1634.atsln and build project by Atmel Studio.
 2. Format hex codes. E.g. >ruby -i.bak -pe '$_.gsub!(/(.+)/,"data \"\\1\"")' tsb1634.hex
 3. Replace tn1634 section of TinySafeBoot data.bas file with the formatted hex codes.
 4. Compile TSB software (a host side tool) with FreeBasic. E.g. >fbc tsb.bas
