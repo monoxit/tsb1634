@@ -1,10 +1,9 @@
 # _Attiny 1634 serial boot loader based on TinySafeBoot_
 
-_Description: This project is based on TinySafeBoot http://jtxp.org/tech/tinysafeboot_en.htm. It contains little modification especially for Attiny1634._
+Original from TinySafeBoot http://jtxp.org/tech/tinysafeboot_en.htm.
+Modified for Attiny1634._
 
 ## Project Setup
-
-_How do I, as a developer, start working on the project?_
 
 _Development environment_
 
