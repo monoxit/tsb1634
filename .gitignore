@@ -1,9 +1,10 @@
-*.atsln
 *.atsuo
 *.lss
 *.tmp
 *.hex
 *.map
 *.obj
-*.asmproj
+Release/
+Debug/
+
 

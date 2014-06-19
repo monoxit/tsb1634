@@ -21,6 +21,10 @@
 ; along with this program; if not, see:
 ; http://www.gnu.org/licenses/
 ;-----------------------------------------------------------------------
+; MODIFICATION NOTICE
+;-----------------------------------------------------------------------
+;Jun.18.2014 Masami Yamakawa Modified for attiny1634
+;
 ;
 ;***********************************************************************
 ; ADJUSTMENTS FOR INDIVIDUAL ASSEMBLY
@@ -49,6 +53,7 @@
 ;.include "tn167def.inc"
 ;.include "tn861def.inc"
 ;.include "tn841def.inc"
+.include "tn1634def.inc"
 
 ;
 ; [...]
@@ -59,8 +64,8 @@
 ;-----------------------------------------------------------------------
 ; YY = Year - MM = Month - DD = Day
 .set    YY      =       14
-.set    MM      =        4
-.set    DD      =       14
+.set    MM      =        6
+.set    DD      =       19
 
 ;.set    BUILDSTATE      = 0b11110000    ; version management option
 .set BUILDSTATE = $F0
@@ -86,6 +91,7 @@
 .equ    TXPORT  = PORTB
 .equ    TXDDR   = DDRB
 .equ    TXBIT   = 1
+
 
 ; Testing
 ;~ .equ    RXPORT  = PORTD
@@ -141,13 +147,23 @@
 
 ; Detect Attiny441/841 to amend missing definition of PAGESIZE
 ;
-.set FOURPAGES = 0
+.set EPAGES = 1
 .if SIGNATURE_000 == $1E
         .if SIGNATURE_002 == $15
                 .if SIGNATURE_001 == $92 || SIGNATURE_001 == $93
-                    .equ PAGESIZE = 32
-                    .set FOURPAGES = 1
+                    .equ PAGESIZE = 8
+                    .set EPAGES = 4
                     .message "ATTINY441/841: 4-PAGE-ERASE MODE"
+                .endif
+        .endif
+.endif
+
+; Detect Attiny1634
+.if SIGNATURE_000 == $1E
+        .if SIGNATURE_001 == $94
+                .if SIGNATURE_002 == $12
+                    .set EPAGES = 4
+                    .message "ATTINY1634 4-PAGE-ERASE MODE"
                 .endif
         .endif
 .endif
@@ -171,8 +187,8 @@
 .if TINYMEGA == 0
 
 ; TSB at target location on ATtinys
-.equ    TSBLEN          = ((300 / PAGESIZE)+1) * PAGESIZE
-.equ    BOOTSTART       = (FLASHEND+1) - PAGESIZE - TSBLEN
+.equ    TSBLEN          = ((300 / (PAGESIZE * EPAGES))+1) * (PAGESIZE * EPAGES)
+.equ    BOOTSTART       = (FLASHEND+1) - (PAGESIZE * EPAGES) - TSBLEN
 .equ    LASTPAGE        = BOOTSTART + TSBLEN
 .equ    DEVICEINFO      = BOOTSTART + TSBLEN - INFOLEN
 
@@ -216,11 +232,6 @@
 .message "Assembly of TSB-Installer."
 
 
-        .if FOURPAGES == 0
-                .set RPAGESIZE = PAGESIZE
-        .else
-                .set RPAGESIZE = PAGESIZE / 4
-        .endif
 
 ;***********************************************************************
 ; START OF TSB-INSTALLER FOR ATTINYS
@@ -273,7 +284,7 @@
         rjmp TL1CHECK
 .endif
 
-.org (RPAGESIZE-2)
+.org ((PAGESIZE*EPAGES)-2)
 TL1CHECK:
 rjmp L1CHECK                            ; LEVEL 1 start with selftest
 ;rjmp TTRESET                           ; circumvent selftest
@@ -283,7 +294,7 @@ rjmp L1CHECK                            ; LEVEL 1 start with selftest
 ; 2nd PAGE: START OF TSB-INSTALLER CRITICAL CODE
 ;-----------------------------------------------------------------------
 
-.org (RPAGESIZE)
+.org (PAGESIZE*EPAGES)
 
 TTRESET:
         cli
@@ -311,12 +322,12 @@ TTRESET:
 
 L1CHECK:
         cli
-        ldi zh, high((RPAGESIZE-1)*2)    ; checksum stored by TSB-SW
-        ldi zl, low ((RPAGESIZE-1)*2)    ; in last two bytes of 1st page
+        ldi zh, high((PAGESIZE*EPAGES-1)*2)    ; checksum stored by TSB-SW
+        ldi zl, low ((PAGESIZE*EPAGES-1)*2)    ; in last two bytes of 1st page
         lpm checkh, z+                  ; load checksum high byte
         lpm checkl, z+                  ; load checksum low byte
-        ldi pcnt,(TLASTPAGE/RPAGESIZE)-1 ; # of pages to check
-L1C0:   ldi bcnt, low(RPAGESIZE*2)       ; # of bytes to check per page
+        ldi pcnt,(TLASTPAGE/PAGESIZE)-EPAGES ; # of pages to check
+L1C0:   ldi bcnt, low(PAGESIZE*2)       ; # of bytes to check per page
 L1C1:   lpm tmp1, z+                    ; load byte of TSB-FW
         sub checkl, tmp1                ; subtract byte value
         sbci checkh, 0                  ; from checksum word
@@ -358,13 +369,13 @@ L2EraseFirstPage:
 
         ldi zl, low (LASTPAGE*2)        ; reset Z to LASTPAGE's start
         ldi zh, high(LASTPAGE*2)
-        ldi pcnt, low ((LASTPAGE - TLASTPAGE) / RPAGESIZE) + 1
+        ldi pcnt, low ((LASTPAGE - TLASTPAGE) / PAGESIZE) + 1
 L3EPB0:
         ldi tmp1, 0b00000011            ; enable PGERS + SPMEN
         out SPMCSR, tmp1                ; in SPMCSR and erase current
         spm                             ; page by SPM (MCU halted)
-        subi zl, low (RPAGESIZE*2)       ; Z = Z - PAGESIZE * 2
-        sbci zh, high(RPAGESIZE*2)
+        subi zl, low (PAGESIZE*2)       ; Z = Z - PAGESIZE * 2
+        sbci zh, high(PAGESIZE*2)
         dec pcnt
         brne L3EPB0
 
@@ -385,14 +396,14 @@ L4WriteVerify:
         ldi tmp2, high (LASTPAGE*2)
         movw ttlo, tmp1
 
-        ldi pcnt, (((LASTPAGE-BOOTSTART)/RPAGESIZE)+1)   ; # of pages
+        ldi pcnt, (((LASTPAGE-BOOTSTART)/PAGESIZE)+1)   ; # of pages
 
 ; load source page contents into buffer
 L4WV0:
         ldi yl, low (BUFFER)            ; set y to start address
         ldi yh, high(BUFFER)            ; of buffer (in SRAM)
         movw bflo, yl                   ; buffer start to bfhi/bflo
-        ldi bcnt, low (RPAGESIZE*2)
+        ldi bcnt, low (PAGESIZE*2)
 
         movw zl, tslo                   ; load Z with source address
 L4WV1:
@@ -400,13 +411,13 @@ L4WV1:
         st y+, tmp1                     ; and store in buffer
         dec bcnt                        ; until full page buffered
         brne L4WV1                      ; loop on
-        subi zl, low (RPAGESIZE*4)       ; decrease by two pages
-        sbci zh, high(RPAGESIZE*4)       ; to continue one page below
+        subi zl, low (PAGESIZE*4)       ; decrease by two pages
+        sbci zh, high(PAGESIZE*4)       ; to continue one page below
         movw tslo, zl                   ; save current Z
 
 ; transfer buffer to flash write buffer and write to target page
         movw yl, bflo                   ; restore y to buffer start
-        ldi bcnt, low(RPAGESIZE*2)
+        ldi bcnt, low(PAGESIZE*2)
         movw zl, ttlo                   ; load Z with target address
 L4WV2:
         ld r0, y+                       ; fill R0/R1 with word
@@ -417,8 +428,8 @@ L4WV2:
         adiw zl, 2                      ; Z = Z + 2
         subi bcnt, 2                    ; bcnt=bcnt-2
         brne L4WV2
-        subi zl, low (RPAGESIZE*2)       ; restore Z to start of current
-        sbci zh, high(RPAGESIZE*2)       ; page for write and verify
+        subi zl, low (PAGESIZE*2)       ; restore Z to start of current
+        sbci zh, high(PAGESIZE*2)       ; page for write and verify
 
         ldi tmp1, 0b00000101            ; enable PRWRT + SPMEN
         out SPMCSR, tmp1                ; in SPMCSR and
@@ -432,7 +443,7 @@ L4WV3:  in tmp1, SPMCSR                 ; wait for flash write finished
 
 L4WV4:
         movw yl, bflo                   ; restore y to buffer start
-        ldi bcnt, low (RPAGESIZE*2)
+        ldi bcnt, low (PAGESIZE*2)
 L4WV5:
         lpm tmp1, z+                    ; load byte from flash
         ld tmp2, y+                     ; load buffer byte
@@ -443,8 +454,8 @@ L4WV6:  rjmp L4WV6                      ; else - hangup!
 
 L4WV7:  dec bcnt                        ; count down page bytecounter
         brne L4WV5                      ; loop until all bytes checked
-        subi zl, low (RPAGESIZE*4)       ; decrease by two pages
-        sbci zh, high(RPAGESIZE*4)       ; to continue one page below
+        subi zl, low (PAGESIZE*4)       ; decrease by two pages
+        sbci zh, high(PAGESIZE*4)       ; to continue one page below
         movw ttlo, zl                   ; save z to target pointer
 L4WV8:
         dec pcnt                        ; loop on with write and verify
@@ -655,7 +666,7 @@ ControlSettings:
 ; uses: tmp1, bcnt, Z
 
 SendPageFromFlash:
-        ldi bcnt, low (PAGESIZE*2)
+        ldi bcnt, low (PAGESIZE*EPAGES*2)
 
 SendFromFlash:
         lpm tmp1, z+                    ; read directly from flash
@@ -673,7 +684,7 @@ SendFromFlash:
 ReadAppFlash:
 RAF0:   rcall RwaitConfirmation
         brts RAFx
-        ldi bcnt, low(PAGESIZE*2)
+        ldi bcnt, low(PAGESIZE*EPAGES*2)
         rcall SendPageFromFlash
 RAF1:   cpi zl, low (BOOTSTART*2)
         brne RAF0
@@ -882,7 +893,7 @@ RCx:
 ; T=0 for internal verifying and EraseAppFlash on any verifying error
 ; T=1 to skip verifying and consequences of an error
 
-.if FOURPAGES == 0                      ; normal (single page) erase
+.if EPAGES == 1                      ; normal (single page) erase
 
 WritePageafterErase:
         rcall EraseFlashPage
@@ -944,15 +955,15 @@ WrPx:
 
 ;-----------------------------------------------------------------------
 
-.if FOURPAGES == 1                      ; 4-Page Erase+Write (tn441/841)
-                                        ; for real PAGESIZE of 8 Words
+.if EPAGES >= 2                      ; Multi-Page Erase+Write (tn441/841/1634)
+                                        ;
 WritePageafterErase:
         rcall EraseFlashPage
 WritePage:
         rcall YtoBUFFER
-        ldi tmp3, 4
+        ldi tmp3, EPAGES
 WrPa4P:
-        ldi bcnt, 16
+        ldi bcnt, PAGESIZE * 2
 WrPa1:
         ld r0, y+                       ; fill R0/R1 with word
         ld r1, y+                       ; from buffer position Y / Y+1
@@ -962,7 +973,7 @@ WrPa1:
         adiw zl, 2                      ; and forward to next word
         subi bcnt, 2
         brne WrPa1
-        sbiw zl, 16                     ; Z back to start of real-page
+        sbiw zl, PAGESIZE * 2           ; Z back to start of real-page
 WrPa2:
         ldi tmp1, 0b00000101            ; enable PGWRT + SPMEN
         out SPMCSR, tmp1                ; in SPMCSR
@@ -972,8 +983,8 @@ WrPa3:
         sbrc tmp1, 0                    ; skip if SPMEN (bit0) cleared
         rjmp WrPa3                      ; ITS BEEN WRITTEN
 
-        ldi bcnt, 16
-        sbiw yl, 16
+        ldi bcnt, PAGESIZE * 2
+        sbiw yl, PAGESIZE * 2
 WrPV1:
         lpm tmp1, z+                    ; load flash byte
         ld tmp2,  y+                    ; load buffer byte
@@ -1005,8 +1016,8 @@ EraseAppFlash:
         ldi zl, low (BOOTSTART*2)       ; point Z to BOOTSTART
         ldi zh, high(BOOTSTART*2)       ; 1st page's 1st address
 EAF0:
-        subi zl, low (PAGESIZE*2)       ; start erasing
-        sbci zh, high(PAGESIZE*2)       ; one page below
+        subi zl, low (PAGESIZE*EPAGES*2)       ; start erasing
+        sbci zh, high(PAGESIZE*EPAGES*2)       ; one page below
 
         rcall EraseFlashPage            ; then erase pagewise down
         brne EAF0                       ; until first page reached
@@ -1031,7 +1042,7 @@ EEE0:
 ;-----------------------------------------------------------------------
 ; ERASE ONE FLASH PAGE
 ;-----------------------------------------------------------------------
-; NOTE: with tn441/841 this is always 4-page erase
+; NOTE: with tn441/841/1634 this is always 4-page erase
 
 EraseFlashPage:
         ldi tmp1, 0b00000011            ; enable PGERS + SPMEN
@@ -1046,7 +1057,7 @@ EraseFlashPage:
 YtoBUFFER:
         ldi yl, low (BUFFER)            ; reset pointer
         ldi yh, high(BUFFER)            ; to programming buffer
-        ldi bcnt, low(PAGESIZE*2)       ; and often needed
+        ldi bcnt, low(PAGESIZE*EPAGES*2)       ; and often needed
         ret
 
 ;-----------------------------------------------------------------------
@@ -1146,7 +1157,7 @@ Waithalfbitcell:
 
 .message "Device info block for ATtiny"
 .db "tsb", low (BUILDDATE), high (BUILDDATE), BUILDSTATE
-.db SIGNATURE_000, SIGNATURE_001, SIGNATURE_002, low (PAGESIZE)
+.db SIGNATURE_000, SIGNATURE_001, SIGNATURE_002, low (PAGESIZE * EPAGES)
 .dw BOOTSTART
 .dw EEPROMEND
 
