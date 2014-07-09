@@ -4,6 +4,7 @@
 *.hex
 *.map
 *.obj
+*.exe
 Release/
 Debug/
 
