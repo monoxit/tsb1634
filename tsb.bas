@@ -293,6 +293,7 @@ end function
 
 sub DeactivateTSB ()
 print #8, "q";
+sleep ComDelay
 close #8
 end sub
 
