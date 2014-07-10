@@ -23,6 +23,10 @@
 '
 ' To be compiled with FreeBasic 0.24 up
 '
+' ----------------------------------------------------------------------
+' MODIFICATION NOTICE
+' July 10 2014, Masami Yamakawa, Modified for 1MHz tn1634 and Bluetooth connection
+'
 '-----------------------------------------------------------------------
 ' VARIABLE AND CONSTANTS DEFINITIONS
 '-----------------------------------------------------------------------
@@ -49,6 +53,7 @@ dim z as UInteger
 const Comset = ",N,8,1,CS,DS,RB0,TB0,BIN"
 dim shared Comport              as string
 dim shared OneWireLocalEcho     as Ubyte    : OneWireLocalEcho = 0
+dim shared ComDelay             as Integer = 0
 
 ' Global variables
 dim shared TSBIDENT     as string
@@ -203,10 +208,12 @@ function ActivateTSB (ByRef Comport as string) as ubyte
 dim bstr as string
 
 if open COM (Comport + Comset for binary as #8) > 0 then return (Err)
-sleep 100
+sleep ComDelay
 
 print #8, "@@@";        ' first try without password
                         ' in case of no reaction, password may be entered
+sleep ComDelay
+
 bstr = RXBuffer
 
 if left$(bstr,3) = "@@@" then
@@ -732,6 +739,8 @@ if i = (len(Comport)) then Comport = Comport + ":9600"
 astr = UCase$(command$(2))          ' check mode switch
 astr = trim (astr, any "-/")
 
+if __FB_ARGC__ > 2 then ComDelay = Valint(command$(3))
+
 If astr = "" then goto ShowInfo
 If astr = "?" then goto HelpScreen
 If astr = "I" then goto ShowInfo
@@ -742,6 +751,8 @@ If astr = "FE" then goto FLASHerase
 If astr = "XXX" then goto EmergencyErase
 
 Filename = (command$(3))            ' get filename
+
+if __FB_ARGC__ > 3 then ComDelay = Valint(command$(4))
 
 If Filename = "" then goto GError
 
@@ -1361,13 +1372,14 @@ print "-------------------------------------------------------------------------
 print "Console Tool for TinySafeBoot, the tiny and safe AVR bootloader    SW:";
 print left$(__DATE_ISO__,4) + mid$(__DATE_ISO__,6,2) + right$(__DATE_ISO__,2)
 print "-------------------------------------------------------------------------------"
+print "MODIFICATION NOTICE: July 10 2014 for tn1634 1MHz and bluetooth"
 print ""
 print "Info:         tsb        Show this helpscreen"
 print "              tsb -l     Show license note and version info"
 print
 print "SYNTAX 1:     CONNECT TO BOOTLOADER"
 print ""
-print "              tsb [Devicename[:Baudrate] {Mode} [Filename] ]"
+print "              tsb [Devicename[:Baudrate] {Mode} [Filename] [delay]]"
 print "Devicename"
 print "COMx          Device name for genuine serial ports under Win/DOS."
 print "/dev/ttySx    Original device name for genuine serial ports under Linux."
@@ -1432,6 +1444,7 @@ print "You should have received a copy of the GNU General Public License"
 print "along with this program; if not, see <http://www.gnu.org/licenses/>."
 print ""
 print "Compiled on " & __DATE_ISO__ " with " & __FB_SIGNATURE__
+print "MODIFICATION NOTICE: July 10 2014, Masami Yamakawa, tn1634 1MHz and bluetooth"
 print
 end
 
