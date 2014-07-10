@@ -1268,7 +1268,7 @@ goto Finished
 '-----------------------------------------------------------------------
 
 TimeoutChange:
-
+if __FB_ARGC__ > 3 then ComDelay = Valint(command$(4))
 if ActivateTSB(Comport) <> 0 then goto GError
 if command$(3) = "" then
         print      "OLD TIMEOUT BYTE : "; TIMEOUT
