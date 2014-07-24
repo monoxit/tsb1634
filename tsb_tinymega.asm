@@ -64,8 +64,8 @@
 ;-----------------------------------------------------------------------
 ; YY = Year - MM = Month - DD = Day
 .set    YY      =       14
-.set    MM      =        6
-.set    DD      =       19
+.set    MM      =        7
+.set    DD      =       24
 
 ;.set    BUILDSTATE      = 0b11110000    ; version management option
 .set BUILDSTATE = $F0
@@ -523,7 +523,12 @@ RESET:
 WaitRX:
         sbi TXDDR, TXBIT                ; if RX=TX ("One-Wire"), port is
         cbi RXDDR, RXBIT                ; driven like open collector,
+        .ifdef PUEB
+        .message "Pull-up RX by PUE"
+        sbi PUEA, PUEA7                 ; a workaround for attiny1634, pull up by PUE
+        .else
         sbi RXPORT, RXBIT               ; else RX is input with pullup
+        .endif
         sbi TXPORT, TXBIT               ; and TX actively driven "1"
 WRXto:
         adiw xl, 1                      ; allow port levels to set
